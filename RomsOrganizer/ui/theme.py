@@ -149,7 +149,15 @@ def draw_logo(surf: pygame.Surface, cx: int, cy: int, scale: float = 1.0) -> Non
         target_w = int(360 * scale)
         ratio = img.get_height() / img.get_width()
         scaled = pygame.transform.smoothscale(img, (target_w, int(target_w * ratio)))
-        surf.blit(scaled, scaled.get_rect(center=(cx, cy)))
+        rect = scaled.get_rect(center=(cx, cy))
+        # Il PNG ha fondo nero pieno: lo incornicio come un 'monitor' neon cosi'
+        # non stacca male sulla griglia dello sfondo.
+        frame = rect.inflate(int(14 * scale), int(14 * scale))
+        pygame.draw.rect(surf, (6, 4, 12), frame, 0, border_radius=int(16 * scale))
+        surf.blit(scaled, rect)
+        pygame.draw.rect(surf, NEON_PINK, frame, max(2, int(3 * scale)),
+                         border_radius=int(16 * scale))
+        pygame.draw.rect(surf, NEON_CYAN, frame, 1, border_radius=int(16 * scale))
         return
     _draw_logo_vector(surf, cx, cy, scale)
 
