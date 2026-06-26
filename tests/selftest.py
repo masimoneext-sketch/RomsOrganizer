@@ -212,6 +212,18 @@ def main() -> int:
     check(cue.path.exists() and bin_path.exists(),
           "il ripristino rimette scheda E traccia al loro posto")
 
+    # 5c) il ripristino NON sovrascrive un file ricreato dopo il backup
+    print("[5c] Ripristino non distruttivo")
+    victim = next(rf for rf in systems["snes"] if rf.name == "Sonic (USA).sfc")
+    orig_v = victim.path
+    backup.move_to_backup(victim, reason="region")
+    orig_v.write_bytes(b"NUOVO FILE DA NON PERDERE")   # qualcuno ricrea il percorso
+    backup.restore_all()
+    check(orig_v.read_bytes() == b"NUOVO FILE DA NON PERDERE",
+          "il file ricreato NON viene sovrascritto dal ripristino")
+    alt = orig_v.with_name(f"{orig_v.stem}__1{orig_v.suffix}")
+    check(alt.exists(), "la ROM ripristinata atterra con nome unico accanto")
+
     # 6) riordino: ROM nel sistema giusto
     print("[6] Riordino - sistema giusto")
     mis = tidy.find_misplaced(systems)

@@ -107,6 +107,10 @@ def restore(entry: dict, dry_run: bool = False) -> bool:
     if not src.exists():
         return False
     dst.parent.mkdir(parents=True, exist_ok=True)
+    # Se nel frattempo qualcosa ha rioccupato il percorso originale, NON lo
+    # sovrascriviamo: il file ripristinato atterra con un nome unico accanto
+    # (stessa cautela di move_to_backup). Cosi' il ripristino non distrugge dati.
+    dst = _unique_dest(dst)
     shutil.move(str(src), str(dst))
     entries = [e for e in _load_manifest() if e.get("backup") != entry["backup"]]
     _save_manifest(entries)
