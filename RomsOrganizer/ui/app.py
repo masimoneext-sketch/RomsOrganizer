@@ -11,6 +11,7 @@ solo dopo CONFERMA. Nessuna cancellazione: i file vanno in 'ROM eliminate'.
 from __future__ import annotations
 
 import os
+from functools import partial
 
 import pygame
 
@@ -58,6 +59,16 @@ class App:
         self.msg = ""
         self.msg_next = "main"
 
+        # lavoro a blocchi con barra di avanzamento
+        self.jobs: list = []
+        self.jobs_total = 0
+        self.jobs_done = 0
+        self.jobs_result = 0
+        self.jobs_label = ""        # cosa sta facendo (testo)
+        self.jobs_current = ""      # elemento in lavorazione (nome file)
+        self.jobs_msg_key = "applied"
+        self.jobs_next = "main"
+
         # setup controller
         self.setup_step = 0
 
@@ -67,6 +78,8 @@ class App:
     def run(self) -> None:
         while self.running:
             self.handle_events()
+            if self.state == "progress":
+                self._tick_jobs()      # avanza il lavoro a piccoli blocchi
             self.draw()
             self.clock.tick(60)
         pygame.quit()
@@ -289,20 +302,68 @@ class App:
                             topleft=(int(self.W * 0.10), y), color=color, glow=selected)
         self._hint([t("hint_move"), t("hint_select"), t("hint_back")])
 
+    # --- motore dei job a blocchi (mantiene viva la UI durante i lavori lunghi) -
+    def _run_jobs(self, jobs: list, label: str,
+                  msg_key: str = "applied", next_state: str = "main") -> None:
+        self.jobs = jobs
+        self.jobs_total = len(jobs)
+        self.jobs_done = 0
+        self.jobs_result = 0
+        self.jobs_label = label
+        self.jobs_current = ""
+        self.jobs_msg_key = msg_key
+        self.jobs_next = next_state
+        if not jobs:
+            self._flash(t("none_found"), next_state)
+            return
+        self.state = "progress"
+
+    def _tick_jobs(self) -> None:
+        """Esegue un blocco di operazioni per frame, poi torna a disegnare."""
+        chunk = 40
+        for _ in range(chunk):
+            if self.jobs_done >= self.jobs_total:
+                break
+            try:
+                self.jobs_result += int(self.jobs[self.jobs_done]() or 0)
+            except Exception:
+                pass
+            self.jobs_done += 1
+        if self.jobs_done >= self.jobs_total:
+            self._flash(t(self.jobs_msg_key, n=self.jobs_result), self.jobs_next)
+
+    # singole unita' di lavoro: aggiornano jobs_current (cosa si sta facendo) e
+    # restituiscono quante 'operazioni' valgono (per il conteggio finale).
+    def _job_move(self, rf, kind):
+        self.jobs_current = rf.name
+        backup.move_to_backup(rf, reason=kind)
+        return 1
+
+    def _job_tidy_gl(self, system, gl):
+        self.jobs_current = system
+        r = tidy.tidy_gamelist(gl)
+        return r["removed_dup"] + r["removed_orphan"]
+
+    def _job_fix_mis(self, m):
+        self.jobs_current = m["rom"].name
+        return 1 if tidy.fix_misplaced(m) else 0
+
+    def _job_clean_names(self, system, gl):
+        self.jobs_current = system
+        return len(tidy.clean_display_names({system: gl}, dry_run=False))
+
+    def _job_restore(self, e):
+        self.jobs_current = e.get("name", "")
+        return 1 if backup.restore(e) else 0
+
     def _apply_resolve(self) -> None:
-        count = 0
-        for g in self.groups:
-            for rf in g.to_remove():
-                backup.move_to_backup(rf, reason=g.kind)
-                count += 1
-        self._flash(t("applied", n=count), "main")
+        jobs = [partial(self._job_move, rf, g.kind)
+                for g in self.groups for rf in g.to_remove()]
+        self._run_jobs(jobs, t("working_move"), "applied", "main")
 
     def _apply_gamelist_fix(self) -> None:
-        count = 0
-        for system, gl in self.gamelists.items():
-            r = tidy.tidy_gamelist(gl)
-            count += r["removed_dup"] + r["removed_orphan"]
-        self._flash(t("applied", n=count), "main")
+        jobs = [partial(self._job_tidy_gl, s, gl) for s, gl in self.gamelists.items()]
+        self._run_jobs(jobs, t("working_gamelist"), "applied", "main")
 
     # ===================================================================
     # RIORDINA
@@ -332,8 +393,8 @@ class App:
                   lambda: self._run_clean_names(), "tidy")
 
     def _run_clean_names(self) -> None:
-        n = len(tidy.clean_display_names(self.gamelists, dry_run=False))
-        self._flash(t("applied", n=n), "main")
+        jobs = [partial(self._job_clean_names, s, gl) for s, gl in self.gamelists.items()]
+        self._run_jobs(jobs, t("working_names"), "applied", "main")
 
     def _tidy_misplaced(self) -> None:
         self.systems = scanner.scan_systems()
@@ -344,8 +405,8 @@ class App:
         self._ask(t("will_move_misplaced", n=len(mis)), self._run_misplaced, "tidy")
 
     def _run_misplaced(self) -> None:
-        n = sum(1 for m in self._mis if tidy.fix_misplaced(m))
-        self._flash(t("applied", n=n), "main")
+        jobs = [partial(self._job_fix_mis, m) for m in self._mis]
+        self._run_jobs(jobs, t("working_misplaced"), "applied", "main")
 
     def _tidy_gamelists(self) -> None:
         self.gamelists = scanner.find_gamelists()
@@ -358,11 +419,8 @@ class App:
         self._ask(t("will_remove_entries", n=total), self._run_tidy_gamelists, "tidy")
 
     def _run_tidy_gamelists(self) -> None:
-        n = 0
-        for gl in self.gamelists.values():
-            r = tidy.tidy_gamelist(gl, dry_run=False)
-            n += r["removed_dup"] + r["removed_orphan"]
-        self._flash(t("applied", n=n), "main")
+        jobs = [partial(self._job_tidy_gl, s, gl) for s, gl in self.gamelists.items()]
+        self._run_jobs(jobs, t("working_gamelist"), "applied", "main")
 
     # ===================================================================
     # RIPRISTINA BACKUP
@@ -379,11 +437,13 @@ class App:
         if action == CONFIRM:
             sel = items[self.menu_index]
             if sel == "__all__":
-                done = backup.restore_all()
+                jobs = [partial(self._job_restore, e) for e in entries]
+                self.menu_index = 0
+                self._run_jobs(jobs, t("working_restore"), "restored", "restore")
             else:
                 done = 1 if backup.restore(sel) else 0
-            self.menu_index = 0
-            self._flash(t("restored", n=done), "restore")
+                self.menu_index = 0
+                self._flash(t("restored", n=done), "restore")
 
     def draw_restore(self) -> None:
         entries = backup.list_backup()
@@ -444,6 +504,32 @@ class App:
         theme.neon_text(self.screen, self.f_mid, self.msg,
                         center=(self.W // 2, self.H // 2), color=theme.NEON_TEAL)
         self._hint([t("hint_confirm")])
+
+    def draw_progress(self) -> None:
+        # cosa sta facendo
+        theme.neon_text(self.screen, self.f_mid, self.jobs_label or t("working"),
+                        center=(self.W // 2, int(self.H * 0.30)), color=theme.NEON_GREEN)
+        # elemento in lavorazione (nome file/sistema), troncato se lungo
+        cur = self.jobs_current
+        if len(cur) > 48:
+            cur = cur[:45] + "..."
+        if cur:
+            theme.neon_text(self.screen, self.f_small, cur,
+                            center=(self.W // 2, int(self.H * 0.40)),
+                            color=theme.WHITE, glow=False)
+        # barra di avanzamento
+        bw, bh = int(self.W * 0.6), int(28 * self.s)
+        bx, by = (self.W - bw) // 2, int(self.H * 0.50)
+        pygame.draw.rect(self.screen, theme.NEON_TEAL, (bx, by, bw, bh), 2)
+        frac = self.jobs_done / self.jobs_total if self.jobs_total else 0
+        if frac > 0:
+            pygame.draw.rect(self.screen, theme.NEON_GREEN,
+                             (bx + 3, by + 3, int((bw - 6) * frac), bh - 6))
+        # percentuale + conteggio
+        theme.neon_text(self.screen, self.f_small,
+                        f"{int(frac * 100)}%   ({self.jobs_done}/{self.jobs_total})",
+                        center=(self.W // 2, by + bh + int(28 * self.s)),
+                        color=theme.NEON_PINK, glow=False)
 
     # ===================================================================
     # PRIMITIVE DI DISEGNO
