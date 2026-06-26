@@ -42,6 +42,10 @@ def build_fake_roms(base: Path) -> None:
     touch(base / "snes" / "Super Mario World (1).sfc")          # same_name
     touch(base / "snes" / "Super Mario Land (Japan).sfc")
     touch(base / "snes" / "Super Mario Land (Germany).sfc")     # region (1G1R)
+    # regioni con priorita' nota: deve vincere Europe (Europe > USA > Japan)
+    touch(base / "snes" / "Sonic (USA).sfc")
+    touch(base / "snes" / "Sonic (Europe).sfc")
+    touch(base / "snes" / "Sonic (Japan).sfc")
 
     # --- psx: formati diversi (chd vs cue+bin) ---
     touch(base / "psx" / "Crash Bandicoot.chd")
@@ -108,6 +112,13 @@ def main() -> int:
     # le regioni NON devono inglobare i 'same_name' (Mario World e' separato)
     check(all(g.base != "super mario world" for g in reg),
           "NON confonde le copie '(1)' con le regioni")
+    # priorita' automatica: per Sonic deve suggerire di tenere Europe
+    sonic = [g for g in reg if g.base == "sonic"]
+    if sonic:
+        kept = sonic[0].candidates[sonic[0].keep_index]
+        check("(Europe)" in kept.name, "automatico: per Sonic tiene (Europe)")
+    else:
+        check(False, "trova il gruppo regioni di Sonic")
 
     # 5) backup + restore
     print("[5] Backup e ripristino")

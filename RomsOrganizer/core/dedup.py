@@ -127,8 +127,12 @@ def find_region_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGro
             if len(rfs) < 2 or len(distinct_names) < 2:
                 continue
             rfs_sorted = sorted(rfs, key=lambda r: r.name)
+            # Suggerimento automatico: tieni la regione con priorita' piu' alta
+            # (Europe > USA > World ...). Resta sempre modificabile a mano.
+            keep = min(range(len(rfs_sorted)),
+                       key=lambda i: config.region_rank(rfs_sorted[i].stem))
             groups.append(DuplicateGroup(
                 kind=KIND_REGION, system=system, base=base,
-                candidates=rfs_sorted, keep_index=0,
+                candidates=rfs_sorted, keep_index=keep,
             ))
     return groups

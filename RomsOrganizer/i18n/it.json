@@ -50,6 +50,8 @@
   "hint_confirm": "A/Invio: conferma",
   "hint_back": "B/Esc: indietro",
   "hint_select": "X/Spazio: scegli tieni",
+  "hint_auto": "A/Invio: automatico",
+  "hint_manual": "X: scegli a mano",
   "yes": "Si",
   "no": "No",
   "empty_systems": "Nessun sistema con ROM"

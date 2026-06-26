@@ -50,6 +50,8 @@
   "hint_confirm": "A/Enter: confirm",
   "hint_back": "B/Esc: back",
   "hint_select": "X/Space: pick keep",
+  "hint_auto": "A/Enter: automatic",
+  "hint_manual": "X: pick manually",
   "yes": "Yes",
   "no": "No",
   "empty_systems": "No system with ROMs"

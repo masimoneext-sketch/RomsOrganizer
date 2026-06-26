@@ -201,20 +201,30 @@ class App:
         self.move(len(self.SCAN_CATS), action)
         if action == BACK:
             self.state, self.menu_index = "main", 0
-        elif action == CONFIRM:
-            cat, _ = self.SCAN_CATS[self.menu_index]
-            items = self.scan.get(cat, [])
-            if not items:
-                self._flash(t("none_found"), "scan_results")
-                return
-            if cat == "gamelist":
-                n = len(items)
-                self._ask(t("will_remove_entries", n=n), self._apply_gamelist_fix, "scan_results")
-            else:
-                self.groups = items
-                self.gi = 0
-                self.highlight = items[0].keep_index
-                self.state = "resolve"
+            return
+        if action not in (CONFIRM, SELECT):
+            return
+        cat, _ = self.SCAN_CATS[self.menu_index]
+        items = self.scan.get(cat, [])
+        if not items:
+            self._flash(t("none_found"), "scan_results")
+            return
+        if cat == "gamelist":
+            self._ask(t("will_remove_entries", n=len(items)),
+                      self._apply_gamelist_fix, "scan_results")
+            return
+        if action == CONFIRM:
+            # AUTOMATICO: usa i suggerimenti (compresso / nome pulito / regione
+            # preferita) e va dritto all'anteprima. Un colpo solo per migliaia di ROM.
+            self.groups = items
+            n = sum(len(g.to_remove()) for g in items)
+            self._ask(t("will_move", n=n), self._apply_resolve, "scan_results")
+        else:
+            # A MANO: la vecchia revisione gruppo per gruppo, per chi vuole controllare.
+            self.groups = items
+            self.gi = 0
+            self.highlight = items[0].keep_index
+            self.state = "resolve"
 
     def draw_scan_results(self) -> None:
         labels = []
@@ -222,7 +232,7 @@ class App:
             items = self.scan.get(cat, [])
             labels.append(f"{t(key)}  [{len(items)}]")
         self._draw_list(t("scan_done"), labels, self.menu_index, top=int(self.H * 0.22))
-        self._hint([t("hint_move"), t("hint_confirm"), t("hint_back")])
+        self._hint([t("hint_move"), t("hint_auto"), t("hint_manual"), t("hint_back")])
 
     # ===================================================================
     # RISOLUZIONE GRUPPI (scelta manuale del 'tieni')

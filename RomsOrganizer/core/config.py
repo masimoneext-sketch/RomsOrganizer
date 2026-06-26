@@ -127,6 +127,36 @@ def display_clean_name(stem: str) -> str:
     return TAG_RE.sub("", stem).strip()
 
 
+# --- Priorita' regioni (modalita' automatica 1G1R) -----------------------
+# Ordine scelto: Europe > USA > World (con Italy subito dopo Europe e Japan
+# in fondo come riempitivo sensato). Quando un gioco esiste in piu' regioni,
+# l'automatico tiene quella con priorita' piu' alta. Configurabile da settings.
+REGION_PRIORITY_DEFAULT = ["europe", "italy", "usa", "world", "japan"]
+
+
+def region_priority() -> list[str]:
+    from_settings = load_settings().get("region_priority")
+    return from_settings if from_settings else REGION_PRIORITY_DEFAULT
+
+
+def region_rank(stem: str) -> int:
+    """Posizione del gioco nella scala di preferenza regioni (piu' basso = meglio).
+
+    Estrae i token dai tag No-Intro: '(USA, Europe)' -> ['usa','europe'] e prende
+    il migliore. Se nessuna regione nota, ritorna un valore alto (bassa priorita').
+    """
+    prio = region_priority()
+    tokens: list[str] = []
+    for tag in re.findall(r"[\(\[]([^\)\]]*)[\)\]]", stem):
+        for part in re.split(r"[,/]", tag):
+            tokens.append(part.strip().lower())
+    best = len(prio) + 1
+    for i, region in enumerate(prio):
+        if region in tokens:
+            best = min(best, i)
+    return best
+
+
 def human_size(n: int) -> str:
     """Byte -> stringa leggibile (1.5 MB)."""
     f = float(n)
