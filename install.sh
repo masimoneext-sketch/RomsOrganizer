@@ -48,9 +48,15 @@ python3 "$APPDIR/tools/register_port.py" || echo "  (avviso: anteprima non regis
 
 rm -rf "$TMP"
 
+# Come RGSX: chiede a EmulationStation di rileggere i gamelist dal disco, cosi'
+# l'immagine appena scritta compare subito e ES non la sovrascrive piu'.
+echo "  Aggiorno la lista giochi di EmulationStation..."
+curl -s "http://127.0.0.1:1234/reloadgames" >/dev/null 2>&1 \
+  && echo "  Lista giochi ricaricata." \
+  || echo "  (se non vedi l'anteprima, riavvia EmulationStation)"
+
 echo ""
 echo "  Fatto!"
-echo "  Ora su Batocera:  Menu > Impostazioni giochi > Aggiorna lista giochi"
-echo "  Poi trovi 'RomsOrganizer' nella sezione PORTS."
+echo "  Trovi 'RomsOrganizer' nella sezione PORTS (con l'immagine)."
 echo "================================================"
 echo ""
