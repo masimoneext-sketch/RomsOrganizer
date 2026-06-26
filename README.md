@@ -16,13 +16,20 @@ nel menu **PORTS**, navigabile col controller (interfaccia pygame in stile arcad
 - **File doppi (stesso nome)** — `Game.zip` + `Game (1).zip`, copie sparse.
 - **Formati diversi** — stesso gioco in `.cue/.bin` e `.chd`: tieni quello che vuoi.
 - **Regioni/revisioni (1G1R)** — `Mario (Japan)` vs `Mario (Europe)`: scegli **a mano**.
+- **Duplicati esatti (hash)** — stesso contenuto byte-per-byte anche con nomi diversi.
 - **Gamelist** — rimuove voci doppie e orfane, riordina alfabeticamente.
 - **Riordino** — pulisce i nomi mostrati e sposta le ROM nel sistema giusto.
+
+> **Giochi multi-disco al sicuro**: `(Disc 1/2/3)` non vengono mai scambiati per
+> regioni alternative. Il 1G1R confronta solo dischi con lo **stesso indice**
+> (`FF7 (USA) Disc 1` vs `FF7 (Japan) Disc 1`), mai Disco 1 contro Disco 2.
 
 ### Sicurezza
 - **Non cancella mai**: i duplicati vengono spostati nella cartella `ROM eliminate`.
 - **Ripristino** completo da menu (registro `manifest`).
 - **Anteprima (dry-run)** prima di ogni operazione: vedi cosa farà, poi confermi.
+- **Set `.cue`/`.bin` mai separati**: le tracce pairate (`cue/bin/ccd/sub`) non
+  vengono confrontate per hash, così un `.cue` non resta mai senza il suo `.bin`.
 
 ### Installazione
 Da terminale Batocera (SSH o console):
@@ -52,13 +59,17 @@ in the **PORTS** menu, controller-friendly (arcade-style pygame UI).
 
 ### Features
 - **Duplicate files** (same name), **format variants** (`.cue/.bin` vs `.chd`),
-  **region/revision** duplicates (1G1R, **manual** pick), **gamelist** cleanup
-  (duplicate/orphan entries + sorting), **tidy** (clean names, move ROMs to the
-  right system).
+  **region/revision** duplicates (1G1R, **manual** pick), **exact content** dupes
+  (byte-for-byte hash), **gamelist** cleanup (duplicate/orphan entries + sorting),
+  **tidy** (clean names, move ROMs to the right system).
+- **Multi-disc safe**: `(Disc 1/2/3)` are never mistaken for alternate regions —
+  1G1R only compares discs with the **same index** across regions.
 
 ### Safety
 - **Never deletes**: duplicates are moved to the `ROM eliminate` folder, with full
   **restore** from the menu and a **dry-run preview** before every action.
+- **`.cue`/`.bin` sets are never split**: paired tracks (`cue/bin/ccd/sub`) are
+  excluded from hash matching, so a `.cue` is never left without its `.bin`.
 
 ### Install
 ```sh
@@ -73,7 +84,7 @@ Then **Menu → Game settings → Update game list**, find *RomsOrganizer* under
 Il **motore** (`RomsOrganizer/core/`) è Python puro, senza pygame: testabile ovunque.
 
 ```sh
-python3 tests/selftest.py     # crea ROM finte e verifica i 4 motori + backup/restore
+python3 tests/selftest.py     # crea ROM finte e verifica i 5 motori + backup/restore
 ```
 
 La **UI** (`RomsOrganizer/ui/`) usa pygame ed è un guscio sopra il motore.

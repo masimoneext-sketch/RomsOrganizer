@@ -118,10 +118,15 @@ def find_region_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGro
     """
     groups: List[DuplicateGroup] = []
     for system, files in systems.items():
-        buckets: Dict[str, List[RomFile]] = defaultdict(list)
+        # Chiave = (nome senza tag, numero di disco). I dischi di un gioco
+        # multi-supporto (FF7 Disc 1/2/3) NON sono regioni alternative: vanno in
+        # bucket separati, cosi' il 1G1R confronta solo dischi con lo stesso indice
+        # ('FF7 (USA) Disc 1' vs 'FF7 (Japan) Disc 1'), mai Disc 1 contro Disc 2.
+        buckets: Dict[tuple, List[RomFile]] = defaultdict(list)
         for rf in files:
-            buckets[config.strip_all_tags(rf.stem)].append(rf)
-        for base, rfs in buckets.items():
+            buckets[(config.strip_all_tags(rf.stem),
+                     config.disc_number(rf.stem) or "")].append(rf)
+        for (base, _disc), rfs in buckets.items():
             # Confronto al netto del suffisso di copia: 'Game' e 'Game (1)' hanno
             # lo stesso nome -> sono copie (affare di find_same_name), non regioni.
             distinct_names = {config.strip_copy_suffix(r.stem) for r in rfs}
@@ -149,7 +154,11 @@ def find_exact_candidates(systems: Dict[str, List[RomFile]]) -> List[RomFile]:
     by_size: Dict[int, List[RomFile]] = defaultdict(list)
     for files in systems.values():
         for rf in files:
-            if rf.size > 0:
+            # Le estensioni pairate (cue/bin/ccd/sub) sono PEZZI di un set-disco,
+            # non file autonomi: due tracce audio zero-filled di giochi diversi
+            # hanno lo stesso hash. Spostarne una separerebbe un .cue dal suo .bin
+            # lasciando il gioco rotto. Restano gestite per-nome dagli altri motori.
+            if rf.size > 0 and rf.ext not in config.PAIRED_EXTS:
                 by_size[rf.size].append(rf)
     candidates: List[RomFile] = []
     for rfs in by_size.values():

@@ -91,6 +91,17 @@ def _build_background(w: int, h: int) -> pygame.Surface:
     return bg
 
 
+def fit_text(font: pygame.font.Font, text: str, max_w: int) -> str:
+    """Tronca il testo con '...' se supera max_w pixel, cosi' non esce dal pannello."""
+    if font.size(text)[0] <= max_w:
+        return text
+    ell = "..."
+    s = text
+    while s and font.size(s + ell)[0] > max_w:
+        s = s[:-1]
+    return (s + ell) if s else ell
+
+
 def draw_panel(surf: pygame.Surface, rect, border=NEON_TEAL) -> None:
     """Pannello scuro semi-trasparente con bordo neon e angoli arrotondati."""
     rect = pygame.Rect(rect)

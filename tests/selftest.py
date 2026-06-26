@@ -52,6 +52,20 @@ def build_fake_roms(base: Path) -> None:
     touch(base / "psx" / "Crash Bandicoot.cue")                 # format variant
     touch(base / "psx" / "Crash Bandicoot.bin", size=2048)
 
+    # --- psx: gioco MULTI-DISCO (non e' 1G1R!) + una seconda regione del Disco 1 ---
+    touch(base / "psx" / "Final Fantasy VII (USA) (Disc 1).chd")
+    touch(base / "psx" / "Final Fantasy VII (USA) (Disc 2).chd")
+    touch(base / "psx" / "Final Fantasy VII (USA) (Disc 3).chd")
+    touch(base / "psx" / "Final Fantasy VII (Japan) (Disc 1).chd")  # regione del SOLO disco 1
+
+    # --- psx: tracce .bin pairate, contenuto identico ma giochi DIVERSI ---
+    # Tracce audio zero-filled: stessa size e stesso hash pur essendo giochi diversi.
+    # Non devono mai essere viste come "duplicato esatto" e separate dal loro .cue.
+    touch(base / "psx" / "Gioco A.cue", size=200)
+    touch(base / "psx" / "Gioco A (Track 3).bin", size=4096)        # zero-filled
+    touch(base / "psx" / "Gioco B.cue", size=210)
+    touch(base / "psx" / "Gioco B (Track 3).bin", size=4096)        # zero-filled, hash uguale
+
     # --- nes: una ROM finita nel sistema sbagliato (sta in 'snes') ---
     touch(base / "snes" / "Contra.nes")                         # misplaced -> nes
     touch(base / "nes" / "Contra (USA).nes")
@@ -126,6 +140,20 @@ def main() -> int:
     else:
         check(False, "trova il gruppo regioni di Sonic")
 
+    # 4a) MULTI-DISCO: non deve mai essere trattato come regioni da scartare
+    print("[4a] Multi-disco (FF7)")
+    ff7 = [g for g in reg if g.base == "final fantasy vii"]
+    # Il Disco 1 esiste in 2 regioni -> 1 solo gruppo, e SOLO fra dischi 1.
+    check(len(ff7) == 1, "FF7: un solo gruppo regioni (il Disco 1 in USA+Japan)")
+    if ff7:
+        cands = ff7[0].candidates
+        check(len(cands) == 2 and all("(Disc 1)" in c.name for c in cands),
+              "FF7: il gruppo regioni contiene solo i due Disco 1")
+    # NESSUN disco 2 o 3 deve mai finire fra i file da rimuovere.
+    removable = {c.name for g in reg for c in g.to_remove()}
+    check(not any("(Disc 2)" in n or "(Disc 3)" in n for n in removable),
+          "FF7: i Dischi 2 e 3 non sono mai proposti per la rimozione")
+
     # 4b) duplicati esatti (hash, pre-filtro per size)
     print("[4b] Duplicati esatti (hash)")
     cands = dedup.find_exact_candidates(systems)
@@ -139,6 +167,15 @@ def main() -> int:
     check(len(pair) == 1, "trova la coppia identica per contenuto (nomi diversi)")
     check(all("Alleyway.gb" not in {c.name for c in g.candidates} for g in exact_groups),
           "NON raggruppa file con stessa size ma contenuto diverso")
+    # Le tracce .bin pairate non vanno MAI confrontate per hash fra giochi diversi:
+    # separerebbero un .cue dal suo .bin lasciando il gioco rotto.
+    exact_names = {c.name for g in exact_groups for c in g.candidates}
+    check("Gioco A (Track 3).bin" not in exact_names
+          and "Gioco B (Track 3).bin" not in exact_names,
+          "NON raggruppa per hash le tracce .bin pairate di giochi diversi")
+    cand_names = {c.name for c in cands}
+    check("Gioco A (Track 3).bin" not in cand_names,
+          "le tracce .bin pairate sono escluse dai candidati hash")
 
     # 5) backup + restore
     print("[5] Backup e ripristino")

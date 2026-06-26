@@ -102,6 +102,18 @@ EXT_TO_SYSTEM = {
 TAG_RE = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
 # Suffisso di copia in coda al nome: " (1)", " [2]", " - Copia", " copy".
 COPY_SUFFIX_RE = re.compile(r"\s*(?:\(\d+\)|\[\d+\]|-?\s*cop(?:y|ia))\s*$", re.IGNORECASE)
+# Tag di disco/CD nei giochi multi-supporto: (Disc 1), (Disk 2), (CD 3), (Side A).
+# Catturiamo il "numero" (anche lettera, es. Side A) per distinguere i dischi.
+DISC_RE = re.compile(r"[\(\[]\s*(?:disc|disk|cd|dvd|side)\s*([0-9a-z]+)[^\)\]]*[\)\]]",
+                     re.IGNORECASE)
+
+
+def disc_number(stem: str) -> str | None:
+    """Identificatore del disco se il nome e' multi-supporto, altrimenti None.
+    'FF VII (USA) (Disc 2)' -> '2'; 'Sonic (USA)' -> None. Usato per NON trattare
+    dischi diversi dello stesso gioco come varianti di regione da scartare."""
+    m = DISC_RE.search(stem)
+    return m.group(1).lower() if m else None
 
 
 def strip_all_tags(stem: str) -> str:

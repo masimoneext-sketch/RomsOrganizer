@@ -334,7 +334,13 @@ class App:
                 pygame.draw.rect(self.screen, theme.SELECT_BG,
                                  (int(self.W * 0.10), y - 2, int(self.W * 0.80), self.row_h),
                                  border_radius=6)
-            label = f"{tag}{rf.name}   ({config.human_size(rf.size)})"
+            # La dimensione e il tag [TIENI] restano sempre leggibili: troncare il
+            # solo NOME (con '...') se il rigo eccede la larghezza interna del pannello.
+            suffix = f"   ({config.human_size(rf.size)})"
+            max_w = int(self.W * 0.80) - pad
+            name = theme.fit_text(self.f_small, rf.name,
+                                  max_w - self.f_small.size(tag + suffix)[0])
+            label = f"{tag}{name}{suffix}"
             theme.neon_text(self.screen, self.f_small, label,
                             topleft=(int(self.W * 0.10), y), color=color, glow=selected)
         self._hint([t("hint_move"), t("hint_select"), t("hint_back")])
@@ -643,8 +649,9 @@ class App:
                                  border_radius=6)
                 pygame.draw.rect(self.screen, theme.NEON_GREEN,
                                  (px + int(6 * self.s), y - 2, int(5 * self.s), self.row_h))
-            theme.neon_text(self.screen, self.f_mid,
-                            ("> " if sel else "  ") + label,
+            full = theme.fit_text(self.f_mid, ("> " if sel else "  ") + label,
+                                  pw - int(44 * self.s))
+            theme.neon_text(self.screen, self.f_mid, full,
                             topleft=(px + int(24 * self.s), y),
                             color=theme.NEON_GREEN if sel else theme.WHITE, glow=sel)
 
