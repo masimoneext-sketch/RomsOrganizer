@@ -66,6 +66,7 @@ class App:
         self.jobs_total = 0
         self.jobs_done = 0
         self.jobs_result = 0
+        self.jobs_failed = 0        # quante operazioni hanno sollevato un errore
         self.jobs_label = ""        # cosa sta facendo (testo)
         self.jobs_current = ""      # elemento in lavorazione (nome file)
         self.jobs_msg_key = "applied"
@@ -346,6 +347,7 @@ class App:
         self.jobs_total = len(jobs)
         self.jobs_done = 0
         self.jobs_result = 0
+        self.jobs_failed = 0
         self.jobs_label = label
         self.jobs_current = ""
         self.jobs_msg_key = msg_key
@@ -369,13 +371,18 @@ class App:
             try:
                 self.jobs_result += int(self.jobs[self.jobs_done]() or 0)
             except Exception:
-                pass
+                # Un'operazione fallita (permessi, disco pieno, file occupato) non
+                # deve sparire in silenzio: la contiamo e la mostriamo a fine lavoro.
+                self.jobs_failed += 1
             self.jobs_done += 1
         if self.jobs_done >= self.jobs_total:
             if self.jobs_on_done:
                 cb = self.jobs_on_done
                 self.jobs_on_done = None
                 cb()
+            elif self.jobs_failed:
+                self._flash(t("applied_errors", n=self.jobs_result, f=self.jobs_failed),
+                            self.jobs_next, sub=self.jobs_msg_sub)
             else:
                 self._flash(t(self.jobs_msg_key, n=self.jobs_result),
                             self.jobs_next, sub=self.jobs_msg_sub)

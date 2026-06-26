@@ -44,28 +44,51 @@ def _unique_dest(dest: Path) -> Path:
         i += 1
 
 
-def move_to_backup(rf: RomFile, reason: str, dry_run: bool = False) -> dict:
-    """Sposta una ROM nel backup e restituisce la voce di manifest creata.
-
-    Con dry_run=True non tocca il disco: serve all'anteprima 'cosa farebbe'.
-    """
-    dest_dir = config.backup_dir() / rf.system
-    dest = _unique_dest(dest_dir / rf.path.name)
-    entry = {
-        "orig": str(rf.path),
+def _entry_for(path: Path, system: str, reason: str, size: int) -> dict:
+    dest = _unique_dest(config.backup_dir() / system / path.name)
+    return {
+        "orig": str(path),
         "backup": str(dest),
-        "system": rf.system,
-        "name": rf.path.name,
+        "system": system,
+        "name": path.name,
         "reason": reason,
         "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "size": rf.size,
+        "size": size,
     }
+
+
+def move_to_backup(rf: RomFile, reason: str, dry_run: bool = False) -> dict:
+    """Sposta una ROM nel backup e restituisce la voce di manifest della scheda.
+
+    Se la ROM e' una scheda cue-set (.cue/.ccd), le sue tracce dati vengono
+    spostate INSIEME (e registrate nel manifest), cosi' l'unita' non si spezza e
+    il ripristino le rimette tutte. Con dry_run=True non tocca il disco.
+    """
+    entry = _entry_for(rf.path, rf.system, reason, rf.size)
+    # Tracce dati della scheda (vuoto se non e' un cue-set).
+    members: list[Path] = []
+    if rf.ext in config.CUESHEET_EXTS:
+        members = config.cue_member_paths(rf.path)
     if dry_run:
         return entry
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(rf.path), str(dest))
+    extra: List[dict] = []
+    for m in members:
+        try:
+            extra.append(_entry_for(m, rf.system, reason, m.stat().st_size))
+        except OSError:
+            pass
+    # Sposta prima le tracce, poi la scheda: se qualcosa va storto, almeno la
+    # scheda resta al suo posto a indicare il set ancora presente.
+    moved: List[dict] = []
+    for e in extra:
+        Path(e["backup"]).parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(e["orig"], e["backup"])
+        moved.append(e)
+    Path(entry["backup"]).parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(rf.path), entry["backup"])
+    moved.append(entry)
     entries = _load_manifest()
-    entries.append(entry)
+    entries.extend(moved)
     _save_manifest(entries)
     return entry
 

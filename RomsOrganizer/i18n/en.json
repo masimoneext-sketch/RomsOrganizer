@@ -46,6 +46,7 @@
   "working_misplaced": "Moving ROMs to the right system...",
   "working_restore": "Restoring files...",
   "applied": "Done! {n} operations completed",
+  "applied_errors": "Done: {n} OK, {f} FAILED",
   "backup_location": "ROMs moved to: {path}",
   "restored": "Restored {n} files",
   "controller_setup": "CONTROLLER SETUP",

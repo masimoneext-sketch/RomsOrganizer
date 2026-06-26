@@ -19,6 +19,21 @@ from .models import (
 )
 
 
+# --- Cue-set: tracce che appartengono a una scheda (.cue/.ccd) -------------
+# Le tracce (.bin/.img/.sub) NON sono giochi a se': vivono solo insieme alla
+# loro scheda. I motori anti-duplicato non devono mai sceglierle/spostarle da
+# sole, altrimenti orfanano la scheda. Qui calcoliamo, per ogni sistema, l'insieme
+# dei percorsi-traccia da escludere dai candidati. backup.move_to_backup poi le
+# sposta insieme alla scheda. (Nota: un .bin "sciolto", senza scheda, resta un
+# gioco valido - es. Mega Drive - e NON viene escluso.)
+def _cueset_member_paths(files: List[RomFile]) -> set:
+    members: set = set()
+    for rf in files:
+        if rf.ext in config.CUESHEET_EXTS:
+            members.update(config.cue_member_paths(rf.path))
+    return members
+
+
 # 1) STESSO NOME -----------------------------------------------------------
 def find_same_name(systems: Dict[str, List[RomFile]]) -> List[DuplicateGroup]:
     """File doppi: 'Game.zip' + 'Game (1).zip', o stessa ROM copiata piu' volte.
@@ -28,8 +43,11 @@ def find_same_name(systems: Dict[str, List[RomFile]]) -> List[DuplicateGroup]:
     """
     groups: List[DuplicateGroup] = []
     for system, files in systems.items():
+        members = _cueset_member_paths(files)
         buckets: Dict[str, List[RomFile]] = defaultdict(list)
         for rf in files:
+            if rf.path in members:
+                continue
             key = f"{config.strip_copy_suffix(rf.stem)}.{rf.ext}"
             buckets[key].append(rf)
         for key, rfs in buckets.items():
@@ -46,26 +64,31 @@ def find_same_name(systems: Dict[str, List[RomFile]]) -> List[DuplicateGroup]:
 
 # 2) FORMATI DIVERSI -------------------------------------------------------
 def _format_unit_key(rf: RomFile) -> str:
-    """Nome-base (senza tag) per accomunare formati dello stesso gioco."""
-    return config.strip_all_tags(rf.stem)
+    """Nome-base (senza tag) + disco, per accomunare i formati dello STESSO pezzo.
+
+    Includere il disco evita di fondere 'Game (Disc 1)' e 'Game (Disc 2)': sono
+    pezzi diversi dello stesso gioco, non due formati dell'identico contenuto."""
+    return f"{config.strip_all_tags(rf.stem)}|{config.disc_token(rf.stem)}"
 
 
 def find_format_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGroup]:
-    """Stesso gioco presente sia compresso (.chd) sia non compresso (.cue/.bin/.iso).
+    """Stesso gioco presente sia compresso (.chd) sia non compresso (.cue/.iso).
 
-    Le coppie .cue+.bin vengono trattate come UN'unita' 'cue-set' e mai separate.
-    Suggerimento: tieni il compresso.
+    Le tracce dati (.bin/.img/.sub) sono escluse: rappresentano gia' la scheda
+    .cue/.ccd, che viaggia con loro. Suggerimento: tieni il compresso.
     """
     groups: List[DuplicateGroup] = []
     for system, files in systems.items():
-        # Consideriamo solo i file che sono formati-disco rilevanti.
+        members = _cueset_member_paths(files)
+        # Solo formati-disco rilevanti, e mai una traccia di un cue-set da sola.
         disc = [f for f in files
-                if f.ext in config.DISC_COMPRESSED or f.ext in config.DISC_UNCOMPRESSED]
+                if (f.ext in config.DISC_COMPRESSED or f.ext in config.DISC_UNCOMPRESSED)
+                and f.path not in members]
         buckets: Dict[str, List[RomFile]] = defaultdict(list)
         for rf in disc:
             buckets[_format_unit_key(rf)].append(rf)
 
-        for base, rfs in buckets.items():
+        for rfs in buckets.values():
             exts = {r.ext for r in rfs}
             has_compressed = exts & config.DISC_COMPRESSED
             has_uncompressed = exts & config.DISC_UNCOMPRESSED
@@ -75,7 +98,8 @@ def find_format_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGro
             # Suggeriamo di tenere il primo formato compresso trovato.
             keep = next(i for i, r in enumerate(rfs) if r.ext in config.DISC_COMPRESSED)
             groups.append(DuplicateGroup(
-                kind=KIND_FORMAT, system=system, base=base,
+                kind=KIND_FORMAT, system=system,
+                base=config.strip_all_tags(rfs[0].stem),
                 candidates=rfs, keep_index=keep,
             ))
     return groups
@@ -118,16 +142,23 @@ def find_region_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGro
     """
     groups: List[DuplicateGroup] = []
     for system, files in systems.items():
+        members = _cueset_member_paths(files)
         buckets: Dict[str, List[RomFile]] = defaultdict(list)
         for rf in files:
-            buckets[config.strip_all_tags(rf.stem)].append(rf)
-        for base, rfs in buckets.items():
+            if rf.path in members:
+                continue
+            # La chiave include il disco/traccia: 'Game (Disc 1)' e 'Game (Disc 2)'
+            # NON finiscono nello stesso gruppo (sono pezzi, non regioni rivali).
+            key = f"{config.strip_all_tags(rf.stem)}|{config.disc_token(rf.stem)}"
+            buckets[key].append(rf)
+        for rfs in buckets.values():
             # Confronto al netto del suffisso di copia: 'Game' e 'Game (1)' hanno
             # lo stesso nome -> sono copie (affare di find_same_name), non regioni.
             distinct_names = {config.strip_copy_suffix(r.stem) for r in rfs}
             if len(rfs) < 2 or len(distinct_names) < 2:
                 continue
             rfs_sorted = sorted(rfs, key=lambda r: r.name)
+            base = config.strip_all_tags(rfs_sorted[0].stem)
             # Suggerimento automatico: tieni la regione con priorita' piu' alta
             # (Europe > USA > World ...). Resta sempre modificabile a mano.
             keep = min(range(len(rfs_sorted)),
@@ -145,11 +176,16 @@ def find_region_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGro
 # file che condividono la dimensione con un altro (i candidati): pochi file,
 # costo I/O minimo. L'hash completo sui candidati garantisce zero falsi positivi.
 def find_exact_candidates(systems: Dict[str, List[RomFile]]) -> List[RomFile]:
-    """File che condividono la dimensione con almeno un altro: vanno hashati."""
+    """File che condividono la dimensione con almeno un altro: vanno hashati.
+
+    Le tracce dati di un cue-set sono escluse: tracce identiche (es. l'audio
+    silenzioso comune a molti rip PSX) collidono fra giochi diversi, e spostarne
+    una orfanerebbe la scheda. La scheda viaggia gia' con le sue tracce."""
     by_size: Dict[int, List[RomFile]] = defaultdict(list)
     for files in systems.values():
+        members = _cueset_member_paths(files)
         for rf in files:
-            if rf.size > 0:
+            if rf.size > 0 and rf.path not in members:
                 by_size[rf.size].append(rf)
     candidates: List[RomFile] = []
     for rfs in by_size.values():

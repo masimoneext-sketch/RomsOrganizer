@@ -79,6 +79,10 @@ DISC_COMPRESSED = {"chd", "rvz", "cso", "pbp", "wbfs"}
 DISC_UNCOMPRESSED = {"iso", "cue", "bin", "gdi", "img", "mdf"}
 # .bin/.cue sono una COPPIA, non duplicati fra loro: non vanno mai separati.
 PAIRED_EXTS = {"cue", "bin", "ccd", "sub"}
+# Le "schede" (cuesheet) indicizzano le tracce; le tracce sono i dati veri.
+# Una scheda + le sue tracce formano UN'unita' (cue-set) da spostare insieme.
+CUESHEET_EXTS = {"cue", "ccd"}
+TRACK_EXTS = {"bin", "img", "sub"}
 
 # --- Mappa estensione -> sistema atteso (per "ROM nel sistema giusto") -----
 # Solo estensioni NON ambigue. Le estensioni generiche (zip, 7z, iso, chd, bin...)
@@ -96,6 +100,60 @@ EXT_TO_SYSTEM = {
     "ngp": "ngp", "ngc": "ngpc", "32x": "sega32x",
     "nds": "nds", "3ds": "n3ds", "vb": "virtualboy",
 }
+
+# --- Disco / traccia: tag che identificano UN PEZZO di un gioco multi-parte --
+# 'Game (Disc 2)', 'Game (Disco 1 of 3)', 'Game (Side B)', 'Game (Track 02)'.
+# Due dischi/tracce diversi NON sono duplicati: vanno tenuti separati nei motori
+# anti-duplicato (regione/formato), altrimenti l'automatico ne sposterebbe uno.
+DISC_TOKEN_RE = re.compile(
+    r"(disc|disco|disk|cd|dvd|side|lato|tape|nastro|part|parte|track|traccia)"
+    r"\s*([0-9]+|[ivx]+|[ab])",
+    re.IGNORECASE,
+)
+
+
+def disc_token(stem: str) -> str:
+    """Identificatore normalizzato del pezzo (disco/lato/traccia), '' se assente.
+
+    Cerca SOLO dentro i tag fra parentesi (dove vivono i marcatori No-Intro/Redump),
+    cosi' un gioco che ha 'CD' nel titolo non viene scambiato per un disco.
+    'Final Fantasy VII (Disc 2)' -> 'disc2' · 'Game (Side B)' -> 'sideb'."""
+    for tag in re.findall(r"[\(\[]([^\)\]]*)[\)\]]", stem):
+        m = DISC_TOKEN_RE.search(tag)
+        if m:
+            return f"{m.group(1).lower()}{m.group(2).lower()}"
+    return ""
+
+
+# --- Cue-set: una scheda (.cue/.ccd) e le sue tracce dati vanno insieme -------
+_CUE_FILE_RE = re.compile(r'^\s*FILE\s+"?(.+?)"?\s+\w+\s*$', re.IGNORECASE | re.MULTILINE)
+
+
+def cue_member_paths(sheet: Path) -> list[Path]:
+    """Tracce dati referenziate da una scheda (esistenti su disco).
+
+    Per i .cue si LEGGE il file e si estraggono le righe FILE (gestisce anche i
+    rip multi-traccia, dove le tracce hanno nomi diversi dalla scheda). Per i .ccd
+    si usano i fratelli .img/.sub con lo stesso nome. Cosi' spostando la scheda si
+    spostano anche le sue tracce: l'unita' cue-set non viene mai spezzata."""
+    ext = sheet.suffix.lower().lstrip(".")
+    out: list[Path] = []
+    if ext == "cue":
+        try:
+            text = sheet.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return out
+        for m in _CUE_FILE_RE.finditer(text):
+            cand = sheet.parent / m.group(1).strip()
+            if cand.is_file() and cand not in out:
+                out.append(cand)
+    elif ext == "ccd":
+        for member_ext in ("img", "sub"):
+            cand = sheet.with_suffix("." + member_ext)
+            if cand.is_file():
+                out.append(cand)
+    return out
+
 
 # --- Regex per ripulire i nomi -------------------------------------------
 # Tutti i tag fra parentesi tonde o quadre: (USA), (Europe), (Rev 1), [!], [b]...
