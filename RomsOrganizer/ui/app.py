@@ -16,7 +16,7 @@ from functools import partial
 import pygame
 
 from ..core import scanner, dedup, backup, tidy, config
-from . import controls, theme
+from . import audio, controls, theme
 from .strings import t, set_lang, toggle_lang
 from .controls import UP, DOWN, CONFIRM, BACK, SELECT, QUIT
 
@@ -42,6 +42,7 @@ class App:
         settings = config.load_settings()
         set_lang(settings.get("lang", "it"))
         self.input = controls.InputManager()
+        self.music = audio.Music()
 
         self.running = True
         self.state = "splash"
@@ -164,7 +165,8 @@ class App:
     # ===================================================================
     # MENU PRINCIPALE
     # ===================================================================
-    MAIN_ITEMS = ["menu_scan", "menu_tidy", "menu_restore", "menu_lang", "menu_quit"]
+    MAIN_ITEMS = ["menu_scan", "menu_tidy", "menu_restore",
+                  "menu_music", "menu_lang", "menu_quit"]
 
     def on_main(self, action: str) -> None:
         self.move(len(self.MAIN_ITEMS), action)
@@ -178,6 +180,8 @@ class App:
                 self.state, self.menu_index = "tidy", 0
             elif choice == "menu_restore":
                 self.state, self.menu_index = "restore", 0
+            elif choice == "menu_music":
+                self.music.toggle()
             elif choice == "menu_lang":
                 lang = toggle_lang()
                 cfg = config.load_settings(); cfg["lang"] = lang; config.save_settings(cfg)
@@ -186,8 +190,13 @@ class App:
 
     def draw_main(self) -> None:
         theme.draw_logo(self.screen, self.W // 2, int(self.H * 0.20), self.s * 0.8)
-        # menu_lang mostra gia' la lingua attiva nella stringa tradotta
-        labels = [t(key) for key in self.MAIN_ITEMS]
+        labels = []
+        for key in self.MAIN_ITEMS:
+            if key == "menu_music":
+                state = t("on") if self.music.enabled else t("off")
+                labels.append(f"{t('menu_music')}: {state}")
+            else:
+                labels.append(t(key))
         self._draw_list(t("menu_title"), labels, self.menu_index, top=int(self.H * 0.40))
         self._hint([t("hint_move"), t("hint_confirm"), t("hint_back")])
 

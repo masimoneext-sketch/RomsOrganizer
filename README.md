@@ -88,5 +88,16 @@ RomsOrganizer/
 
 > Requisiti: Python 3 (incluso in Batocera) e pygame (di norma già presente).
 
+## 🎵 Musica / Credits
+
+Musica di sottofondo (attivabile/disattivabile dal menu **Musica: ON/OFF**):
+
+> **"Climbers In The Dark"** by **Nihilore** — licensed under
+> [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+> Source: [Free Music Archive](https://freemusicarchive.org/music/Nihilore/it-is-still-happening-it-should-not-be-happening/climbers-in-the-dark/).
+
+Vedi [assets/CREDITS.md](RomsOrganizer/assets/CREDITS.md).
+
 ## Licenza
-MIT — non affiliato a Batocera, RetroBat o RGS.
+Codice: MIT — non affiliato a Batocera, RetroBat o RGS.
+Musica: CC BY 4.0 (vedi sopra).
