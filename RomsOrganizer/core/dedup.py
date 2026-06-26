@@ -64,11 +64,13 @@ def find_same_name(systems: Dict[str, List[RomFile]]) -> List[DuplicateGroup]:
 
 # 2) FORMATI DIVERSI -------------------------------------------------------
 def _format_unit_key(rf: RomFile) -> str:
-    """Nome-base (senza tag) + disco, per accomunare i formati dello STESSO pezzo.
+    """Nome che identifica UNA release (regione e disco INCLUSI).
 
-    Includere il disco evita di fondere 'Game (Disc 1)' e 'Game (Disc 2)': sono
-    pezzi diversi dello stesso gioco, non due formati dell'identico contenuto."""
-    return f"{config.strip_all_tags(rf.stem)}|{config.disc_token(rf.stem)}"
+    Il motore-formato accomuna solo lo stesso contenuto in container diversi
+    (.chd vs .cue/.iso). NON deve mai fondere regioni diverse ('Game (USA)' vs
+    'Game (Europe)' sono affare del 1G1R) ne' dischi diversi: per questo si tiene
+    il nome con i tag, togliendo solo il suffisso di copia ('Game (1)')."""
+    return config.strip_copy_suffix(rf.stem)
 
 
 def find_format_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGroup]:

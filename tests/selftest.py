@@ -60,6 +60,12 @@ def build_fake_roms(base: Path) -> None:
     touch(base / "psx" / "Final Fantasy VII (USA) (Disc 2).chd")
     touch(base / "psx" / "Final Fantasy VII (USA) (Disc 3).chd")
 
+    # --- psx: stessa gioco, REGIONI diverse in formati diversi ---
+    # NON sono variazioni di formato: il motore-formato non deve fonderle (sarebbe
+    # 1G1R, scelta manuale). Tipico errore: tenere il .chd USA e spostare l'iso EU.
+    touch(base / "psx" / "Tekken (USA).chd")
+    touch(base / "psx" / "Tekken (Europe).iso")
+
     # --- segacd: tracce identiche fra giochi diversi (audio silenzioso comune) ---
     # Due cue-set distinti le cui tracce .bin hanno contenuto IDENTICO: il motore
     # 'esatto' non deve proporle, e non deve orfanare le schede .cue.
@@ -168,6 +174,9 @@ def main() -> int:
     check(not ff7_reg, "regione NON fonde Disc 1/2/3 di Final Fantasy VII")
     ff7_fmt = [g for g in fmt if "final fantasy vii" in g.base]
     check(not ff7_fmt, "formato NON fonde i tre dischi di Final Fantasy VII")
+    tekken_fmt = [g for g in fmt if g.base == "tekken"]
+    check(not tekken_fmt,
+          "formato NON fonde regioni diverse (Tekken USA .chd vs Europe .iso)")
 
     # 4d) CUE-SET: le tracce non sono candidati a se' (no orfani)
     print("[4d] Cue-set (tracce mai trattate da sole)")
