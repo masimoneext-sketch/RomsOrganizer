@@ -46,6 +46,7 @@
   "working_misplaced": "Sposto le ROM nel sistema giusto...",
   "working_restore": "Ripristino i file...",
   "applied": "Fatto! {n} operazioni completate",
+  "backup_location": "ROM spostate in: {path}",
   "restored": "Ripristinati {n} file",
   "controller_setup": "CONFIGURA IL CONTROLLER",
   "controller_intro": "Premi il tasto richiesto. ESC con la tastiera per saltare.",

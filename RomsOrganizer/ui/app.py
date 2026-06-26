@@ -59,6 +59,7 @@ class App:
         self.pending_text = ""
         self.msg = ""
         self.msg_next = "main"
+        self.msg_sub = ""           # seconda riga informativa opzionale
 
         # lavoro a blocchi con barra di avanzamento
         self.jobs: list = []
@@ -69,6 +70,7 @@ class App:
         self.jobs_current = ""      # elemento in lavorazione (nome file)
         self.jobs_msg_key = "applied"
         self.jobs_next = "main"
+        self.jobs_msg_sub = ""       # seconda riga del messaggio finale
         self.jobs_on_done = None     # callback opzionale a fine job (invece del msg)
 
         # rilevamento duplicati esatti (lazy: hashing solo quando si apre)
@@ -339,7 +341,7 @@ class App:
 
     # --- motore dei job a blocchi (mantiene viva la UI durante i lavori lunghi) -
     def _run_jobs(self, jobs: list, label: str, msg_key: str = "applied",
-                  next_state: str = "main", on_done=None) -> None:
+                  next_state: str = "main", on_done=None, msg_sub: str = "") -> None:
         self.jobs = jobs
         self.jobs_total = len(jobs)
         self.jobs_done = 0
@@ -348,6 +350,7 @@ class App:
         self.jobs_current = ""
         self.jobs_msg_key = msg_key
         self.jobs_next = next_state
+        self.jobs_msg_sub = msg_sub
         self.jobs_on_done = on_done
         if not jobs:
             if on_done:
@@ -374,7 +377,8 @@ class App:
                 self.jobs_on_done = None
                 cb()
             else:
-                self._flash(t(self.jobs_msg_key, n=self.jobs_result), self.jobs_next)
+                self._flash(t(self.jobs_msg_key, n=self.jobs_result),
+                            self.jobs_next, sub=self.jobs_msg_sub)
 
     # singole unita' di lavoro: aggiornano jobs_current (cosa si sta facendo) e
     # restituiscono quante 'operazioni' valgono (per il conteggio finale).
@@ -418,7 +422,8 @@ class App:
     def _apply_resolve(self) -> None:
         jobs = [partial(self._job_move, rf, g.kind)
                 for g in self.groups for rf in g.to_remove()]
-        self._run_jobs(jobs, t("working_move"), "applied", "main")
+        self._run_jobs(jobs, t("working_move"), "applied", "main",
+                       msg_sub=t("backup_location", path=str(config.backup_dir())))
 
     def _apply_gamelist_fix(self) -> None:
         jobs = [partial(self._job_tidy_gl, s, gl) for s, gl in self.gamelists.items()]
@@ -512,6 +517,8 @@ class App:
         theme.neon_text(self.screen, self.f_small,
                         t("backup_info", n=summ["count"], size=config.human_size(summ["bytes"])),
                         center=(self.W // 2, int(self.H * 0.20)), color=theme.DIM, glow=False)
+        theme.neon_text(self.screen, self.f_small, str(config.backup_dir()),
+                        center=(self.W // 2, int(self.H * 0.25)), color=theme.NEON_TEAL, glow=False)
         if not entries:
             theme.neon_text(self.screen, self.f_mid, t("restore_empty"),
                             center=(self.W // 2, int(self.H * 0.45)), color=theme.WHITE)
@@ -552,8 +559,9 @@ class App:
                         center=(self.W // 2, int(self.H * 0.62)), color=theme.NEON_GREEN)
         self._hint([t("hint_confirm"), t("hint_back")])
 
-    def _flash(self, text: str, next_state: str) -> None:
+    def _flash(self, text: str, next_state: str, sub: str = "") -> None:
         self.msg = text
+        self.msg_sub = sub
         self.msg_next = next_state
         self.state = "message"
 
@@ -563,8 +571,13 @@ class App:
             self.menu_index = 0
 
     def draw_message(self) -> None:
+        cy = self.H // 2 if not self.msg_sub else int(self.H * 0.45)
         theme.neon_text(self.screen, self.f_mid, self.msg,
-                        center=(self.W // 2, self.H // 2), color=theme.NEON_TEAL)
+                        center=(self.W // 2, cy), color=theme.NEON_TEAL)
+        if self.msg_sub:
+            theme.neon_text(self.screen, self.f_small, self.msg_sub,
+                            center=(self.W // 2, cy + int(50 * self.s)),
+                            color=theme.DIM, glow=False)
         self._hint([t("hint_confirm")])
 
     def draw_progress(self) -> None:
