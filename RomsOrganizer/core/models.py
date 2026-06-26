@@ -37,6 +37,7 @@ class RomFile:
 KIND_SAME_NAME = "same_name"    # stesso gioco, file doppi (Game / Game (1))
 KIND_FORMAT = "format"          # stesso gioco, formati diversi (.cue/.bin vs .chd)
 KIND_REGION = "region"          # stesso gioco, regioni diverse (Japan vs Europe) -> 1G1R
+KIND_EXACT = "exact"            # contenuto IDENTICO byte-per-byte (hash), anche con nomi diversi
 
 
 @dataclass

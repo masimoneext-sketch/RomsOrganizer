@@ -56,6 +56,12 @@ def build_fake_roms(base: Path) -> None:
     touch(base / "snes" / "Contra.nes")                         # misplaced -> nes
     touch(base / "nes" / "Contra (USA).nes")
 
+    # --- gb: duplicati ESATTI (contenuto identico, nomi diversi) ---
+    (base / "gb").mkdir(parents=True, exist_ok=True)
+    (base / "gb" / "Tetris.gb").write_bytes(b"ABCD" * 100)
+    (base / "gb" / "tetris_backup.gb").write_bytes(b"ABCD" * 100)   # identico -> exact
+    (base / "gb" / "Alleyway.gb").write_bytes(b"WXYZ" * 100)         # stessa size, diverso
+
     # --- gamelist con voce orfana e voce doppia ---
     gl = base / "nes" / "gamelist.xml"
     gl.write_text(
@@ -119,6 +125,20 @@ def main() -> int:
         check("(Europe)" in kept.name, "automatico: per Sonic tiene (Europe)")
     else:
         check(False, "trova il gruppo regioni di Sonic")
+
+    # 4b) duplicati esatti (hash, pre-filtro per size)
+    print("[4b] Duplicati esatti (hash)")
+    cands = dedup.find_exact_candidates(systems)
+    names_c = {c.name for c in cands}
+    check({"Tetris.gb", "tetris_backup.gb", "Alleyway.gb"} <= names_c,
+          "candidati = file che condividono la dimensione")
+    hashes = {str(c.path): dedup.hash_file(c.path) for c in cands}
+    exact_groups = dedup.group_exact(cands, hashes)
+    pair = [g for g in exact_groups
+            if {c.name for c in g.candidates} == {"Tetris.gb", "tetris_backup.gb"}]
+    check(len(pair) == 1, "trova la coppia identica per contenuto (nomi diversi)")
+    check(all("Alleyway.gb" not in {c.name for c in g.candidates} for g in exact_groups),
+          "NON raggruppa file con stessa size ma contenuto diverso")
 
     # 5) backup + restore
     print("[5] Backup e ripristino")

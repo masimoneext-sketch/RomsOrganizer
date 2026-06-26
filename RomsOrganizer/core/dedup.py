@@ -6,6 +6,7 @@ backup.py esegue. Questa separazione e' cio' che rende il tool sicuro.
 """
 from __future__ import annotations
 
+import hashlib
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
@@ -14,7 +15,7 @@ from typing import Dict, List
 from . import config
 from .models import (
     DuplicateGroup, GamelistIssue, RomFile,
-    KIND_SAME_NAME, KIND_FORMAT, KIND_REGION,
+    KIND_SAME_NAME, KIND_FORMAT, KIND_REGION, KIND_EXACT,
 )
 
 
@@ -135,4 +136,52 @@ def find_region_variants(systems: Dict[str, List[RomFile]]) -> List[DuplicateGro
                 kind=KIND_REGION, system=system, base=base,
                 candidates=rfs_sorted, keep_index=keep,
             ))
+    return groups
+
+
+# 5) DUPLICATI ESATTI (contenuto identico, anche con nomi diversi) ----------
+# Strategia: NON si hasha tutta la libreria. Due file identici hanno per forza
+# la stessa dimensione, gia' nota gratis dallo scan. Si calcola l'hash SOLO sui
+# file che condividono la dimensione con un altro (i candidati): pochi file,
+# costo I/O minimo. L'hash completo sui candidati garantisce zero falsi positivi.
+def find_exact_candidates(systems: Dict[str, List[RomFile]]) -> List[RomFile]:
+    """File che condividono la dimensione con almeno un altro: vanno hashati."""
+    by_size: Dict[int, List[RomFile]] = defaultdict(list)
+    for files in systems.values():
+        for rf in files:
+            if rf.size > 0:
+                by_size[rf.size].append(rf)
+    candidates: List[RomFile] = []
+    for rfs in by_size.values():
+        if len(rfs) > 1:
+            candidates.extend(rfs)
+    return candidates
+
+
+def hash_file(path: Path, chunk: int = 1 << 20) -> str:
+    """MD5 del file letto a blocchi (1 MB), per non caricarlo tutto in RAM."""
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(chunk), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def group_exact(candidates: List[RomFile], hashes: Dict[str, str]) -> List[DuplicateGroup]:
+    """Raggruppa i candidati per (dimensione, hash): contenuto identico garantito."""
+    buckets: Dict[tuple, List[RomFile]] = defaultdict(list)
+    for rf in candidates:
+        h = hashes.get(str(rf.path))
+        if h:
+            buckets[(rf.size, h)].append(rf)
+    groups: List[DuplicateGroup] = []
+    for rfs in buckets.values():
+        if len(rfs) < 2:
+            continue
+        # tieni il nome piu' pulito/corto; gli altri (anche in altri sistemi) in backup
+        rfs_sorted = sorted(rfs, key=lambda r: (len(r.name), r.name))
+        groups.append(DuplicateGroup(
+            kind=KIND_EXACT, system=rfs_sorted[0].system,
+            base=rfs_sorted[0].stem, candidates=rfs_sorted, keep_index=0,
+        ))
     return groups

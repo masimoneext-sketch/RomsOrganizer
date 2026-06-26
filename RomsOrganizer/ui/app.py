@@ -69,6 +69,11 @@ class App:
         self.jobs_current = ""      # elemento in lavorazione (nome file)
         self.jobs_msg_key = "applied"
         self.jobs_next = "main"
+        self.jobs_on_done = None     # callback opzionale a fine job (invece del msg)
+
+        # rilevamento duplicati esatti (lazy: hashing solo quando si apre)
+        self._exact_candidates: list = []
+        self._exact_hashes: dict = {}
 
         # setup controller
         self.setup_step = 0
@@ -217,7 +222,8 @@ class App:
         self.state, self.menu_index = "scan_results", 0
 
     SCAN_CATS = [("same_name", "cat_same_name"), ("format", "cat_format"),
-                 ("region", "cat_region"), ("gamelist", "cat_gamelist")]
+                 ("region", "cat_region"), ("gamelist", "cat_gamelist"),
+                 ("exact", "cat_exact")]
 
     def on_scan_results(self, action: str) -> None:
         self.move(len(self.SCAN_CATS), action)
@@ -227,6 +233,19 @@ class App:
         if action not in (CONFIRM, SELECT):
             return
         cat, _ = self.SCAN_CATS[self.menu_index]
+        # Duplicati esatti: calcolo pigro (hashing solo ora che l'utente apre).
+        if cat == "exact" and "exact" not in self.scan:
+            candidates = dedup.find_exact_candidates(self.systems)
+            if not candidates:
+                self.scan["exact"] = []
+                self._flash(t("none_found"), "scan_results")
+                return
+            self._exact_candidates = candidates
+            self._exact_hashes = {}
+            jobs = [partial(self._job_hash, rf) for rf in candidates]
+            self._run_jobs(jobs, t("working_hash"), next_state="scan_results",
+                           on_done=self._finish_exact)
+            return
         items = self.scan.get(cat, [])
         if not items:
             self._flash(t("none_found"), "scan_results")
@@ -251,8 +270,10 @@ class App:
     def draw_scan_results(self) -> None:
         labels = []
         for cat, key in self.SCAN_CATS:
-            items = self.scan.get(cat, [])
-            labels.append(f"{t(key)}  [{len(items)}]")
+            if cat == "exact" and "exact" not in self.scan:
+                labels.append(f"{t(key)}  [{t('scan_hint')}]")
+            else:
+                labels.append(f"{t(key)}  [{len(self.scan.get(cat, []))}]")
         self._draw_list(t("scan_done"), labels, self.menu_index, top=int(self.H * 0.22))
         self._hint([t("hint_move"), t("hint_auto"), t("hint_manual"), t("hint_back")])
 
@@ -288,7 +309,7 @@ class App:
     def draw_resolve(self) -> None:
         group = self.groups[self.gi]
         cat_key = {"same_name": "cat_same_name", "format": "cat_format",
-                   "region": "cat_region"}.get(group.kind, "cat_region")
+                   "region": "cat_region", "exact": "cat_exact"}.get(group.kind, "cat_region")
         theme.neon_text(self.screen, self.f_mid, t(cat_key),
                         center=(self.W // 2, int(self.H * 0.10)), color=theme.NEON_PINK)
         theme.neon_text(self.screen, self.f_small,
@@ -317,8 +338,8 @@ class App:
         self._hint([t("hint_move"), t("hint_select"), t("hint_back")])
 
     # --- motore dei job a blocchi (mantiene viva la UI durante i lavori lunghi) -
-    def _run_jobs(self, jobs: list, label: str,
-                  msg_key: str = "applied", next_state: str = "main") -> None:
+    def _run_jobs(self, jobs: list, label: str, msg_key: str = "applied",
+                  next_state: str = "main", on_done=None) -> None:
         self.jobs = jobs
         self.jobs_total = len(jobs)
         self.jobs_done = 0
@@ -327,8 +348,12 @@ class App:
         self.jobs_current = ""
         self.jobs_msg_key = msg_key
         self.jobs_next = next_state
+        self.jobs_on_done = on_done
         if not jobs:
-            self._flash(t("none_found"), next_state)
+            if on_done:
+                on_done()
+            else:
+                self._flash(t("none_found"), next_state)
             return
         self.state = "progress"
 
@@ -344,7 +369,12 @@ class App:
                 pass
             self.jobs_done += 1
         if self.jobs_done >= self.jobs_total:
-            self._flash(t(self.jobs_msg_key, n=self.jobs_result), self.jobs_next)
+            if self.jobs_on_done:
+                cb = self.jobs_on_done
+                self.jobs_on_done = None
+                cb()
+            else:
+                self._flash(t(self.jobs_msg_key, n=self.jobs_result), self.jobs_next)
 
     # singole unita' di lavoro: aggiornano jobs_current (cosa si sta facendo) e
     # restituiscono quante 'operazioni' valgono (per il conteggio finale).
@@ -369,6 +399,21 @@ class App:
     def _job_restore(self, e):
         self.jobs_current = e.get("name", "")
         return 1 if backup.restore(e) else 0
+
+    def _job_hash(self, rf):
+        self.jobs_current = rf.name
+        try:
+            self._exact_hashes[str(rf.path)] = dedup.hash_file(rf.path)
+        except OSError:
+            pass
+        return 0
+
+    def _finish_exact(self) -> None:
+        """Costruisce i gruppi di duplicati esatti dagli hash appena calcolati."""
+        groups = dedup.group_exact(self._exact_candidates, self._exact_hashes)
+        self.scan["exact"] = groups
+        msg = t("groups_found", n=len(groups)) if groups else t("none_found")
+        self._flash(msg, "scan_results")
 
     def _apply_resolve(self) -> None:
         jobs = [partial(self._job_move, rf, g.kind)
