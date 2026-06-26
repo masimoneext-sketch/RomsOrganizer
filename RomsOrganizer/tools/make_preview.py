@@ -20,8 +20,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")   # nessun display reale
-os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")   # niente audio
 
 import pygame  # noqa: E402
 
@@ -84,12 +83,16 @@ def main() -> int:
         print("[make_preview] logo.png assente: salto il video.")
         return 0
 
+    # Render OFFSCREEN puro: niente set_mode, niente convert_alpha (che
+    # richiederebbero un display). Cosi' non serve alcun driver video.
     try:
-        pygame.init()
-        pygame.display.set_mode((W, H))   # serve per convert_alpha col driver dummy
-        logo = pygame.image.load(str(logo_path)).convert_alpha()
-    except pygame.error as e:
-        print("[make_preview] pygame non disponibile:", e)
+        try:
+            logo = pygame.image.load(str(logo_path))
+        except pygame.error:
+            pygame.display.init()      # alcuni build vogliono il video init per load
+            logo = pygame.image.load(str(logo_path))
+    except Exception as e:
+        print("[make_preview] impossibile caricare il logo:", e)
         return 0
 
     base_w = int(W * 0.62)
