@@ -14,16 +14,18 @@ _ASSETS = Path(__file__).resolve().parent.parent / "assets"
 _logo_img: pygame.Surface | None = None
 _logo_loaded = False
 
-# Palette neon synthwave
-BG_TOP = (10, 0, 20)
-BG_BOTTOM = (19, 0, 43)
+# Palette neon synthwave, base NERA per agganciarsi al fondo del logo.
+BG = (8, 6, 16)
+BG_GLOW = (24, 10, 40)
 NEON_GREEN = (57, 255, 20)
 NEON_TEAL = (29, 233, 182)
 NEON_PINK = (255, 43, 214)
 NEON_CYAN = (0, 229, 255)
+NEON_PURPLE = (138, 43, 226)
 WHITE = (235, 235, 245)
-DIM = (120, 120, 150)
-SELECT_BG = (40, 10, 70)
+DIM = (130, 120, 160)
+SELECT_BG = (60, 16, 90)
+PANEL_FILL = (16, 10, 28)
 
 
 def make_font(size: int, bold: bool = True) -> pygame.font.Font:
@@ -34,17 +36,68 @@ def make_font(size: int, bold: bool = True) -> pygame.font.Font:
         return pygame.font.Font(None, size)
 
 
+_bg_cache: pygame.Surface | None = None
+
+
 def draw_background(surf: pygame.Surface) -> None:
-    """Sfondo a gradiente verticale + scanline CRT."""
+    """Sfondo nero con griglia synthwave neon + scanline (coerente col logo).
+
+    Lo sfondo e' statico: lo disegno una volta e lo metto in cache, cosi' ogni
+    frame e' solo un blit (veloce anche durante i lavori con la barra).
+    """
+    global _bg_cache
     w, h = surf.get_size()
-    for y in range(h):
-        f = y / max(1, h - 1)
-        col = tuple(int(BG_TOP[i] + (BG_BOTTOM[i] - BG_TOP[i]) * f) for i in range(3))
-        pygame.draw.line(surf, col, (0, y), (w, y))
+    if _bg_cache is None or _bg_cache.get_size() != (w, h):
+        _bg_cache = _build_background(w, h)
+    surf.blit(_bg_cache, (0, 0))
+
+
+def _build_background(w: int, h: int) -> pygame.Surface:
+    bg = pygame.Surface((w, h))
+    bg.fill(BG)
+
+    # alone in alto al centro
+    glow = pygame.Surface((w, h), pygame.SRCALPHA)
+    cx, cy = w // 2, int(h * 0.18)
+    for r in range(int(h * 0.5), 0, -8):
+        a = max(0, 30 - r * 30 // int(h * 0.5))
+        pygame.draw.circle(glow, (*BG_GLOW, a), (cx, cy), r)
+    bg.blit(glow, (0, 0))
+
+    # pavimento synthwave: griglia in prospettiva nella meta' bassa
+    grid = pygame.Surface((w, h), pygame.SRCALPHA)
+    horizon = int(h * 0.56)
+    vp = (w // 2, horizon)
+    # linee verticali che convergono al punto di fuga
+    for i in range(-12, 13):
+        x_bottom = w // 2 + i * (w // 12)
+        pygame.draw.line(grid, (*NEON_PINK, 60), (x_bottom, h), vp, 1)
+    # linee orizzontali sempre piu' fitte verso l'orizzonte
+    t = 0.0
+    while t < 1.0:
+        y = horizon + int((h - horizon) * (t * t))
+        a = int(30 + 70 * t)
+        pygame.draw.line(grid, (*NEON_CYAN, a), (0, y), (w, y), 1)
+        t += 0.06
+    # linea orizzonte marcata
+    pygame.draw.line(grid, (*NEON_PINK, 120), (0, horizon), (w, horizon), 2)
+    bg.blit(grid, (0, 0))
+
+    # scanline CRT leggere su tutto
     scan = pygame.Surface((w, h), pygame.SRCALPHA)
     for y in range(0, h, 3):
-        pygame.draw.line(scan, (29, 233, 182, 12), (0, y), (w, y))
-    surf.blit(scan, (0, 0))
+        pygame.draw.line(scan, (0, 0, 0, 40), (0, y), (w, y))
+    bg.blit(scan, (0, 0))
+    return bg
+
+
+def draw_panel(surf: pygame.Surface, rect, border=NEON_TEAL) -> None:
+    """Pannello scuro semi-trasparente con bordo neon e angoli arrotondati."""
+    rect = pygame.Rect(rect)
+    fill = pygame.Surface(rect.size, pygame.SRCALPHA)
+    fill.fill((*PANEL_FILL, 210))
+    surf.blit(fill, rect.topleft)
+    pygame.draw.rect(surf, border, rect, 2, border_radius=10)
 
 
 def neon_text(surf: pygame.Surface, font: pygame.font.Font, text: str,

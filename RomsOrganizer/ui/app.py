@@ -289,6 +289,10 @@ class App:
                         center=(self.W // 2, int(self.H * 0.25)), color=theme.NEON_TEAL, glow=False)
 
         top = int(self.H * 0.34)
+        pad = int(12 * self.s)
+        theme.draw_panel(self.screen, (int(self.W * 0.08), top - pad,
+                                       int(self.W * 0.84),
+                                       len(group.candidates) * self.row_h + pad * 2))
         for i, rf in enumerate(group.candidates):
             y = top + i * self.row_h
             selected = (i == self.highlight)
@@ -296,7 +300,8 @@ class App:
             color = theme.NEON_GREEN if selected else theme.WHITE
             if selected:
                 pygame.draw.rect(self.screen, theme.SELECT_BG,
-                                 (int(self.W * 0.08), y - 4, int(self.W * 0.84), self.row_h))
+                                 (int(self.W * 0.10), y - 2, int(self.W * 0.80), self.row_h),
+                                 border_radius=6)
             label = f"{tag}{rf.name}   ({config.human_size(rf.size)})"
             theme.neon_text(self.screen, self.f_small, label,
                             topleft=(int(self.W * 0.10), y), color=color, glow=selected)
@@ -482,6 +487,9 @@ class App:
             self.state = self.pending_back
 
     def draw_confirm(self) -> None:
+        theme.draw_panel(self.screen, (int(self.W * 0.15), int(self.H * 0.24),
+                                       int(self.W * 0.70), int(self.H * 0.46)),
+                         border=theme.NEON_PINK)
         theme.neon_text(self.screen, self.f_mid, t("dry_run_title"),
                         center=(self.W // 2, int(self.H * 0.30)), color=theme.NEON_PINK)
         theme.neon_text(self.screen, self.f_mid, self.pending_text,
@@ -506,6 +514,8 @@ class App:
         self._hint([t("hint_confirm")])
 
     def draw_progress(self) -> None:
+        theme.draw_panel(self.screen, (int(self.W * 0.12), int(self.H * 0.22),
+                                       int(self.W * 0.76), int(self.H * 0.46)))
         # cosa sta facendo
         theme.neon_text(self.screen, self.f_mid, self.jobs_label or t("working"),
                         center=(self.W // 2, int(self.H * 0.30)), color=theme.NEON_GREEN)
@@ -545,21 +555,30 @@ class App:
                    top: int, max_rows: int = 12) -> None:
         if title:
             theme.neon_text(self.screen, self.f_big, title,
-                            center=(self.W // 2, top - int(self.row_h * 1.6)),
+                            center=(self.W // 2, top - int(self.row_h * 1.7)),
                             color=theme.NEON_GREEN)
         # finestra scorrevole
         start = max(0, min(index - max_rows // 2, max(0, len(labels) - max_rows)))
         visible = labels[start:start + max_rows]
+        # pannello neon dietro la lista
+        pad = int(12 * self.s)
+        px = int(self.W * 0.12)
+        pw = int(self.W * 0.76)
+        ph = len(visible) * self.row_h + pad * 2
+        theme.draw_panel(self.screen, (px, top - pad, pw, ph))
         for i, label in enumerate(visible):
             real = start + i
             y = top + i * self.row_h
             sel = (real == index)
             if sel:
                 pygame.draw.rect(self.screen, theme.SELECT_BG,
-                                 (int(self.W * 0.15), y - 4, int(self.W * 0.70), self.row_h))
+                                 (px + int(6 * self.s), y - 2, pw - int(12 * self.s), self.row_h),
+                                 border_radius=6)
+                pygame.draw.rect(self.screen, theme.NEON_GREEN,
+                                 (px + int(6 * self.s), y - 2, int(5 * self.s), self.row_h))
             theme.neon_text(self.screen, self.f_mid,
                             ("> " if sel else "  ") + label,
-                            topleft=(int(self.W * 0.18), y),
+                            topleft=(px + int(24 * self.s), y),
                             color=theme.NEON_GREEN if sel else theme.WHITE, glow=sel)
 
     def _draw_centered_msg(self, text: str) -> None:

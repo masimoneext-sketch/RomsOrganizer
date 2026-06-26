@@ -34,7 +34,7 @@ mkdir -p "$APPDIR"
 # copia il package python (la cartella interna RomsOrganizer/)
 cp -r "$SRC/RomsOrganizer/." "$APPDIR/"
 
-echo "[4/4] Creo il launcher nel menu PORTS..."
+echo "[4/5] Creo il launcher nel menu PORTS..."
 cat > "$LAUNCHER" <<'EOF'
 #!/bin/bash
 # Launcher RomsOrganizer - avvia l'app pygame dal menu PORTS di Batocera.
@@ -42,6 +42,9 @@ cd /userdata/roms/ports
 python3 -m RomsOrganizer
 EOF
 chmod +x "$LAUNCHER"
+
+echo "[5/5] Registro il logo nel menu PORTS..."
+python3 "$APPDIR/tools/register_port.py" || echo "  (avviso: anteprima non registrata, l'app funziona comunque)"
 
 rm -rf "$TMP"
 
