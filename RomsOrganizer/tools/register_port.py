@@ -18,6 +18,7 @@ from pathlib import Path
 PORTS = Path(os.environ.get("ROMSORG_PORTS_DIR", "/userdata/roms/ports"))
 LAUNCHER_PATH = "./RomsOrganizer.sh"
 IMG_REL = "./images/romsorganizer.png"
+VIDEO_REL = "./videos/romsorganizer.mp4"
 SRC_IMG = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
 DESC = ("Pulizia e riordino delle ROM duplicate per Batocera: file doppi, "
         "formati diversi, regioni (1G1R), gamelist. Con backup e ripristino.")
@@ -68,6 +69,9 @@ def main() -> int:
         _set(game, "image", IMG_REL)
         _set(game, "thumbnail", IMG_REL)
         _set(game, "marquee", IMG_REL)
+    # video di anteprima animato (se gia' generato da make_preview.py)
+    if (PORTS / "videos" / "romsorganizer.mp4").is_file():
+        _set(game, "video", VIDEO_REL)
 
     tree.write(gl, encoding="utf-8", xml_declaration=True)
     print("[register_port] gamelist aggiornato:", gl)
